@@ -1,4 +1,4 @@
-/irdroid.ino
+//irdroid.ino
 
 #include <SPI.h>
 #include <boards.h>
