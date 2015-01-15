@@ -1,28 +1,17 @@
-/*
+/irdroid.ino
 
-Copyright (c) 2012-2014 RedBearLab
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-*/
-
-/*
- *    Chat
- *
- *    Simple chat sketch, work with the Chat iOS/Android App.
- *    Type something from the Arduino serial monitor to send
- *    to the Chat App or vice verse.
- *
- */
-
-//"spi.h/boards.h" is needed in every new project
 #include <SPI.h>
 #include <boards.h>
 #include <ble_shield.h>
+
+#define IRpin_PIN PIND
+#define IRpin 2
+
+// the maximum duration of a pulse
+#define TIMEOUT 65000
+
+// time intervall between cheks if the IR Receiver is on HIGH or LOW
+#define TIME_INTERVALL 20
 
 void setup()
 {  
@@ -30,14 +19,16 @@ void setup()
   // Set your REQN and RDYN here before ble_begin() if you need
   //ble_set_pins(3, 2);
   
-  // Set your BLE Shield name here, max. length 10
   ble_set_name("IrArduino");
   
   // Init. and start BLE library.
   ble_begin();
   
   // Enable serial debug
+  
   Serial.begin(9600);
+  
+  Serial.println("Ready to receive IR codes");
 }
 
 unsigned char buf[16] = {0};
@@ -46,32 +37,61 @@ unsigned char len = 0;
 unsigned char test[200] = { 100, 50, 100, 50 , 50, 50, 100, 50 , 50, 50, 100, 50 ,
     	50, 50, 100, 50 , 50, 50, 100, 50 , 50, 50, 100, 50 , 50, 50, 100, 50 ,
     	50, 50, 100, 50 , 50, 50, 100, 50 , 50, 50, 100, 50 , 50};
-unsigned char code[200]; 
+
 
 void loop()
 {
-  if ( ble_available() )
-  {
-    while ( ble_available() )
-      Serial.write(ble_read());
-      
-      
-    Serial.println();
-  }
-  
-  if ( Serial.available() )
-  {
-    delay(5);
-    
-    for (int i = 0; i < 200; i++)
-    	code[i] = i;
-    
-    while ( Serial.available() ) {
-        ble_write( Serial.read() );
-    }
-    
+	Serial.println("Read code!");
+	
+  	unsigned char* code = readIR();
+  	
+  	Serial.println(code);
+
 	ble_write_bytes(code, sizeof(code));
+  
+  	ble_do_events();
+}
+
+unsigned char* readIR(void) {
+  int high, low, count = 0; // time intervalls
+  unsigned char code[200];  // char to send per bluetooth
+  
+  while (IRpin_PIN & (1 << IRpin)) { // pin is HIGH
+
+     high++;
+     delayMicroseconds(TIME_INTERVALL); // wait intervall
+
+
+     if ((high >= TIMEOUT) && (count != 0)) { // != 0 because of the pause between signals
+       logCode(code);
+       count = 0;
+       return 0;
+     }
+  }
+  // HIGH intervall
+  code[count++] = high;
+  
+  // same as above
+  while (! (IRpin_PIN & _BV(IRpin))) { // pin is LOW
+  
+     low++;
+     delayMicroseconds(TIME_INTERVALL);
+     
+     if ((low >= TIMEOUT) && (count != 0)) {
+       logCode(code);
+       count = 0;
+       return code;
+     }
   }
   
-  ble_do_events();
+  // LOW intervall
+  code[count++] = low;
+}
+
+void logCode(unsigned char* code) {
+  Serial.println("\nReceived Signal");
+  for (char i = 0; i < sizeof(code); i++) {
+    Serial.print(code[i] * TIME_INTERVALL, DEC);
+    Serial.println(" usec, ");
+  }
 }
