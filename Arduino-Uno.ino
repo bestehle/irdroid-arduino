@@ -39,14 +39,12 @@ void setup()
 unsigned char buf[16] = {0};
 unsigned char len = 0;
 
-unsigned char test[200] = { 100, 50, 100, 50 , 50, 50, 100, 50 , 50, 50, 100, 50 ,
-    	50, 50, 100, 50 , 50, 50, 100, 50 , 50, 50, 100, 50 , 50, 50, 100, 50 ,
-    	50, 50, 100, 50 , 50, 50, 100, 50 , 50, 50, 100, 50 , 50};
-
 int power[200] = {169,168,21,63,21,63,21,63,21,21,21,21,21,21,21,21,21,21,21,
 63,21,63,21,63,21,21,21,21,21,21,21,21,21,21,21,21,21,63,21,21,21,21,21,21,21
 ,21,21,21,21,21,21,64,21,21,21,63,21,63,21,63,21,63,21,63,21,63,21,1794,169,
 168,21,21,21,3694};
+
+unsigned code[200];  // char to send per bluetooth
 
 void loop()
 {
@@ -54,20 +52,24 @@ void loop()
 
 
 	ble_do_events();
+	
+  
 
-	int length[1];
-  	int* code = readIR(length);
+  	int length = readIR();
   	
-  	Serial.println(length[0]);
-  	for (int i = 0; i < length[0]; i++) {
-  		Serial.println(code[i]);
+  	Serial.print("Length ");
+  	Serial.println(length);
+  	Serial.print("Code [");
+  	for (int i = 0; i < length; i++) {
+  		Serial.print(code[i] * TIME_INTERVALL / 10);
+  		Serial.print(", ");
   	}
+  	Serial.println("]");
 
-	//ble_write_bytes(code, sizeof(code));
 	
-	delay(5000);
+	delay(1000);
 	
-	sendAsProntoHex(code, length[0]);
+	sendAsProntoHex(code, length);
 
   	ble_do_events();
   	ble_do_events();
@@ -76,71 +78,78 @@ void loop()
   	ble_do_events();
 }
 
-void sendAsProntoHex(int code[], int length) {
+void sendAsProntoHex(unsigned code[], int length) {
 	char prontoCode[5];
+	Serial.print("Pronto HEX code [");
 	
-	strcpy(prontoCode, "0000 "); 		// Dummy
+	strcpy(prontoCode, "0000 "); 				// Dummy
 	ble_write_bytes((unsigned char*) prontoCode, 5);
-	strcpy(prontoCode, FREQUENCY); 		// Frequnecy
+	Serial.print(prontoCode);
+	
+	strcpy(prontoCode, FREQUENCY); 				// Frequnecy
 	ble_write_bytes((unsigned char*) prontoCode, 5);
-	strcpy(prontoCode, "0000 "); 	// Sequenc 1
+	Serial.print(prontoCode);
+	
+	char* string = {"0000"};					// Sequenc 1
+	strcpy(prontoCode, string);
+	dechex(length - 1, prontoCode, 4, 0);
+	strcpy(prontoCode + 4, " ");
 	ble_write_bytes((unsigned char*) prontoCode, 5);
-	strcpy(prontoCode, "0000 "); 	// Sequenc 2
+	Serial.print(prontoCode);
+	
+	strcpy(prontoCode, "0000 "); 				// Sequenc 2
 	ble_write_bytes((unsigned char*) prontoCode, 5);
+	Serial.print(prontoCode);
 	
 		
-	for (int i = 0; i < length; i++) {
+	for (int i = 1; i < length; i++) {
 		char* string = {"0000"};
 		strcpy(prontoCode, string);
-		dechex(code[i], prontoCode, 4, 0);
+		dechex(code[i] * 2, prontoCode, 4, 0);
 		strcpy(prontoCode + 4, " ");
 		ble_write_bytes((unsigned char*) prontoCode, 5);
-		Serial.print(i);
-		Serial.print(" - ");
-		Serial.println(prontoCode);
-		if (i % 5 == 0)
+		Serial.print(prontoCode);
+		if (i % 4 == 0)
 			ble_do_events();
 	}
+	Serial.println("]");
 }
 
-int* readIR(int* lengthOut) {
-  int high, low, count = 0; // time intervalls
-  int code[200];  // char to send per bluetooth
-  
-  while (IRpin_PIN & (1 << IRpin)) { // pin is HIGH
-
-     high++;
-     delayMicroseconds(TIME_INTERVALL); // wait intervall
-
-
-     if ((high >= TIMEOUT) && (count != 0)) { // != 0 because of the pause between signals
-       logCode(code);
-       lengthOut[0] = count;
-       count = 0;
-       return 0;
-     }
+uint16_t readIR() {
+  unsigned count = 0; // time intervalls
+ 
+  while(true) {
+	  unsigned high = 0;
+	  unsigned low = 0;
+	  while (IRpin_PIN & (1 << IRpin)) { // pin is HIGH
+	
+	     high++;
+	     delayMicroseconds(TIME_INTERVALL); // wait intervall
+	
+	
+	     if ((high >= TIMEOUT) && (count != 0)) { // != 0 because of the pause between signals
+	       Serial.println("Received IR signal");
+	       return count;
+	     }
+	  }
+	  // HIGH intervall
+	  code[count++] = high;
+	  
+	  // same as above
+	  while (! (IRpin_PIN & _BV(IRpin))) { // pin is LOW
+	  
+	     low++;
+	     delayMicroseconds(TIME_INTERVALL);
+	     
+	     if ((low >= TIMEOUT) && (count != 0)) {
+	     	Serial.println("Received IR signal");
+	       	return count;
+	     }
+	  }
+	  
+	  // LOW intervall
+	  code[count++] = low;
   }
-  // HIGH intervall
-  code[count++] = high;
-  Serial.println(high);
-  
-  // same as above
-  while (! (IRpin_PIN & _BV(IRpin))) { // pin is LOW
-  
-     low++;
-     delayMicroseconds(TIME_INTERVALL);
-     
-     if ((low >= TIMEOUT) && (count != 0)) {
-       logCode(code);
-       lengthOut[0] = count;
-       count = 0;
-       return code;
-     }
-  }
-  
-  // LOW intervall
-  code[count++] = low;
-  Serial.println(low);
 }
 
 void logCode(int* code) {
