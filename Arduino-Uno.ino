@@ -37,80 +37,115 @@ void setup()
 }
 
 unsigned char buf[16] = {0};
-unsigned char len = 0;
-
-int power[200] = {169,168,21,63,21,63,21,63,21,21,21,21,21,21,21,21,21,21,21,
-63,21,63,21,63,21,21,21,21,21,21,21,21,21,21,21,21,21,63,21,21,21,21,21,21,21
-,21,21,21,21,21,21,64,21,21,21,63,21,63,21,63,21,63,21,63,21,63,21,1794,169,
-168,21,21,21,3694};
+int len = 0;
 
 unsigned code[200];  // char to send per bluetooth
 
 void loop()
 {
+  	delay(1000);
 	Serial.println("Read code!");
 
-
-	ble_do_events();
-	
-  
-
   	int length = readIR();
+  	len = length;
   	
   	Serial.print("Length ");
   	Serial.println(length);
   	Serial.print("Code [");
   	for (int i = 0; i < length; i++) {
-  		Serial.print(code[i] * TIME_INTERVALL / 10);
+  		Serial.print(code[i]);
   		Serial.print(", ");
   	}
   	Serial.println("]");
+  	
+  	converToProntoHex(code, len);
 
+	delay(2000);
+	
+	
+	ble_set_name("IrArduino");
+  
+  	// Init. and start BLE library.
+  	ble_begin();
+	
+	while(!ble_connected()) {
+		//ble_write_byte((unsigned char*) "Test", 5);
+		delay(2000);
+		ble_do_events();
+	}
 	
 	delay(1000);
-	
+	Serial.println(length);
 	sendAsProntoHex(code, length);
+	
+	delay(5000);
+	
+	//ble_reset();
 
-  	ble_do_events();
-  	ble_do_events();
-  	ble_do_events();
-  	ble_do_events();
-  	ble_do_events();
+	asm volatile ("  jmp 0");
 }
 
 void sendAsProntoHex(unsigned code[], int length) {
 	char prontoCode[5];
-	Serial.print("Pronto HEX code [");
+	Serial.print("Send Pronto HEX code");
 	
 	strcpy(prontoCode, "0000 "); 				// Dummy
 	ble_write_bytes((unsigned char*) prontoCode, 5);
-	Serial.print(prontoCode);
 	
 	strcpy(prontoCode, FREQUENCY); 				// Frequnecy
 	ble_write_bytes((unsigned char*) prontoCode, 5);
-	Serial.print(prontoCode);
 	
 	char* string = {"0000"};					// Sequenc 1
 	strcpy(prontoCode, string);
 	dechex(length - 1, prontoCode, 4, 0);
 	strcpy(prontoCode + 4, " ");
 	ble_write_bytes((unsigned char*) prontoCode, 5);
-	Serial.print(prontoCode);
 	
 	strcpy(prontoCode, "0000 "); 				// Sequenc 2
 	ble_write_bytes((unsigned char*) prontoCode, 5);
+		
+	for (int i = 1; i < length; i++) {
+		char* string = {"0000"};
+		strcpy(prontoCode, string);
+		dechex(code[i], prontoCode, 4, 0);
+		strcpy(prontoCode + 4, " ");
+		ble_write_bytes((unsigned char*) prontoCode, 5);
+		if (i % 4 == 0) {
+			Serial.println("Sending !")
+			ble_do_events();
+			delay(100);
+		}
+	}
+	ble_do_events();
+	Serial.println("Finished sending!");
+}
+
+void converToProntoHex(unsigned code[], int length) {
+	char prontoCode[5];
+	Serial.print("Pronto HEX code [");
+	
+	strcpy(prontoCode, "0000 "); 				// Dummy
+	Serial.print(prontoCode);
+	
+	strcpy(prontoCode, FREQUENCY); 				// Frequnecy
+	Serial.print(prontoCode);
+	
+	char* string = {"0000"};					// Sequenc 1
+	strcpy(prontoCode, string);
+	dechex(length - 1, prontoCode, 4, 0);
+	strcpy(prontoCode + 4, " ");
+	Serial.print(prontoCode);
+	
+	strcpy(prontoCode, "0000 "); 				// Sequenc 2
 	Serial.print(prontoCode);
 	
 		
 	for (int i = 1; i < length; i++) {
 		char* string = {"0000"};
 		strcpy(prontoCode, string);
-		dechex(code[i] * 2, prontoCode, 4, 0);
+		dechex(code[i], prontoCode, 4, 0);
 		strcpy(prontoCode + 4, " ");
-		ble_write_bytes((unsigned char*) prontoCode, 5);
 		Serial.print(prontoCode);
-		if (i % 4 == 0)
-			ble_do_events();
 	}
 	Serial.println("]");
 }
@@ -133,7 +168,7 @@ uint16_t readIR() {
 	     }
 	  }
 	  // HIGH intervall
-	  code[count++] = high;
+	  code[count++] = high * 3 / 4;
 	  
 	  // same as above
 	  while (! (IRpin_PIN & _BV(IRpin))) { // pin is LOW
@@ -148,7 +183,7 @@ uint16_t readIR() {
 	  }
 	  
 	  // LOW intervall
-	  code[count++] = low;
+	  code[count++] = low * 3 / 4;
   }
 }
 
