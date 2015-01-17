@@ -73,7 +73,7 @@ void loop()
 		ble_do_events();
 	}
 	
-	delay(1000);
+	delay(5000);
 	Serial.println(length);
 	sendAsProntoHex(code, length);
 	
@@ -102,6 +102,7 @@ void sendAsProntoHex(unsigned code[], int length) {
 	
 	strcpy(prontoCode, "0000 "); 				// Sequenc 2
 	ble_write_bytes((unsigned char*) prontoCode, 5);
+	ble_do_events();
 		
 	for (int i = 1; i < length; i++) {
 		char* string = {"0000"};
