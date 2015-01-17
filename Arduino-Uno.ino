@@ -69,7 +69,6 @@ void loop()
   	ble_begin();
 	
 	while(!ble_connected()) {
-		//ble_write_byte((unsigned char*) "Test", 5);
 		delay(2000);
 		ble_do_events();
 	}
@@ -111,13 +110,12 @@ void sendAsProntoHex(unsigned code[], int length) {
 		strcpy(prontoCode + 4, " ");
 		ble_write_bytes((unsigned char*) prontoCode, 5);
 		if (i % 4 == 0) {
-			Serial.println("Sending !")
 			ble_do_events();
-			delay(100);
 		}
 	}
 	ble_do_events();
 	Serial.println("Finished sending!");
+	delay(5000);
 }
 
 void converToProntoHex(unsigned code[], int length) {
